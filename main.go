@@ -16,10 +16,8 @@ type Bookmark struct {
 	Url  string
 }
 
-type Bookmarks struct {
-}
-
 func main() {
+	file_changed := false
 	bookmarks_file, err := ioutil.ReadFile("./bookmarks.json")
 	if err != nil {
 		log.Fatal("Error when opening file: ", err)
@@ -31,8 +29,6 @@ func main() {
 	if err != nil {
 		log.Fatal("Error during Unmarshal(): ", err)
 	}
-
-	log.Printf("Unmarshaled:  %+v", bookmarks)
 
 	// REST API
 	r := gin.Default()
@@ -47,6 +43,19 @@ func main() {
 	})
 
 	r.GET("/bookmarks", func(c *gin.Context) {
+		if file_changed {
+			bookmarks_file, err = ioutil.ReadFile("./bookmarks.json")
+			if err != nil {
+				log.Fatal("Error when opening file: ", err)
+			}
+
+			err = json.Unmarshal([]byte(bookmarks_file), &bookmarks)
+			if err != nil {
+				log.Fatal("Error during Unmarshal(): ", err)
+			}
+			file_changed = false
+		}
+
 		c.JSON(200, bookmarks)
 	})
 
@@ -55,6 +64,19 @@ func main() {
 		idS, err := strconv.Atoi(id)
 		if err != nil {
 			log.Fatal("Error during ID Conversion(): ", err)
+		}
+
+		if file_changed {
+			bookmarks_file, err = ioutil.ReadFile("./bookmarks.json")
+			if err != nil {
+				log.Fatal("Error when opening file: ", err)
+			}
+
+			err = json.Unmarshal([]byte(bookmarks_file), &bookmarks)
+			if err != nil {
+				log.Fatal("Error during Unmarshal(): ", err)
+			}
+			file_changed = false
 		}
 
 		for bookmark := range bookmarks {
@@ -70,6 +92,22 @@ func main() {
 
 	r.POST("/bookmark/:id", func(c *gin.Context) {
 		id := c.Param("id")
+
+		if file_changed {
+			bookmarks_file, err = ioutil.ReadFile("./bookmarks.json")
+			if err != nil {
+				log.Fatal("Error when opening file: ", err)
+			}
+
+			err = json.Unmarshal([]byte(bookmarks_file), &bookmarks)
+			if err != nil {
+				log.Fatal("Error during Unmarshal(): ", err)
+			}
+			file_changed = false
+		}
+
+		var tmpBookmark Bookmark
+		c.BindJSON(&tmpBookmark)
 		idS, err := strconv.Atoi(id)
 		if err != nil {
 			log.Fatal("Error during ID Conversion(): ", err)
@@ -83,7 +121,17 @@ func main() {
 			}
 		}
 
-		bookmarks := append(bookmarks, Bookmark{Id: idS, Name: "Test", Url: "Test"})
+		bookmarks := append(bookmarks, Bookmark{Id: idS, Name: tmpBookmark.Name, Url: tmpBookmark.Url})
+
+		file, _ := json.MarshalIndent(bookmarks, "", " ")
+
+		// err = ioutil.WriteFile("new_bookmarks.json", []byte(tmpBookmark), 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_ = ioutil.WriteFile("bookmarks.json", file, 0644)
+		file_changed = true
+
 		c.String(200, "Sucess: added")
 
 		log.Println(bookmarks)
